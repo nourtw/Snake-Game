@@ -172,7 +172,6 @@ class SnakeGame:
             self.snake.pop(0)
 
     def generate_powerup(self):
-        """Randomly generate either a poison apple or a shield."""
         powerup_type = random.choice(['poison', 'shield'])
         while True:
             powerup = (random.randint(0, (WIDTH - BLOCK_SIZE) // BLOCK_SIZE) * BLOCK_SIZE,
@@ -184,7 +183,7 @@ class SnakeGame:
                 elif powerup_type == 'shield':
                     self.shield = powerup
                     print("Generated Shield at:", self.shield)
-                break  # Exit the loop once a valid power-up is generated
+                break 
 
     def generate_barriers(self):
         num_barriers = 5
