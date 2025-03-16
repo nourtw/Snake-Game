@@ -1,111 +1,103 @@
 import pygame
 import random
 import sys
+import json
 
 pygame.init()
 
 WIDTH, HEIGHT = 800, 600
 WHITE = (255, 255, 255)
-GREEN = (0, 255, 0)
-DARK_GREEN = (0, 180, 0)  
+GREEN = (0, 200, 0)
 BLACK = (0, 0, 0)
+RED = (255, 50, 50)
+PURPLE = (150, 0, 150)
+BLUE = (0, 150, 255)
 BLOCK_SIZE = 20
 
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Advanced Snake Game")
 
 font = pygame.font.Font(None, 36)
+clock = pygame.time.Clock()
 
 background_image = pygame.image.load("wallpaperflare.com_wallpaper (6).JPG")
 background_image = pygame.transform.scale(background_image, (WIDTH, HEIGHT))
 
-try:
-    apple_image = pygame.image.load("apple.png")
-    apple_image = pygame.transform.scale(apple_image, (BLOCK_SIZE, BLOCK_SIZE))
-    golden_apple_image = pygame.image.load("golden_apple.png")
-    golden_apple_image = pygame.transform.scale(golden_apple_image, (BLOCK_SIZE, BLOCK_SIZE))
-    poison_apple_image = pygame.image.load("poison_apple.png")
-    poison_apple_image = pygame.transform.scale(poison_apple_image, (BLOCK_SIZE, BLOCK_SIZE))
-    speed_boost_image = pygame.image.load("speed_boost.jpg")
-    speed_boost_image = pygame.transform.scale(speed_boost_image, (BLOCK_SIZE, BLOCK_SIZE))
-    shield_image = pygame.image.load("shield.jpg")
-    shield_image = pygame.transform.scale(shield_image, (BLOCK_SIZE, BLOCK_SIZE))
-    slowdown_image = pygame.image.load("slowdown.png")
-    slowdown_image = pygame.transform.scale(slowdown_image, (BLOCK_SIZE, BLOCK_SIZE))
-except:
-    apple_image = None  
-    golden_apple_image = None
-    poison_apple_image = None
-    speed_boost_image = None
-    shield_image = None
-    slowdown_image = None
+def load_best_scores():
+    try:
+        with open("best_scores.json", "r") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return []
 
-try:
-    snake_skin_images = [
-        pygame.image.load("snake_skin_1.jpg"),
-        pygame.image.load("snake_skin_2.jpg"),
-        pygame.image.load("snake_skin_3.jpg"),
-    ]
-    for i in range(len(snake_skin_images)):
-        snake_skin_images[i] = pygame.transform.scale(snake_skin_images[i], (BLOCK_SIZE, BLOCK_SIZE))
-except:
-    snake_skin_images = None
+def save_best_scores(scores):
+    with open("best_scores.json", "w") as f:
+        json.dump(scores, f)
 
-clock = pygame.time.Clock()
+def show_leaderboard(scores, recent_score):
+    leaderboard_screen = pygame.display.set_mode((400, 300))
+    pygame.display.set_caption("Leaderboard")
+    running = True
+    while running:
+        leaderboard_screen.fill(BLACK)
+        title_text = font.render("Leaderboard", True, WHITE)
+        leaderboard_screen.blit(title_text, (130, 20))
+        recent_text = font.render(f"Recent Score: {recent_score}", True, WHITE)
+        leaderboard_screen.blit(recent_text, (100, 60))
+        for i, score in enumerate(scores):
+            score_text = font.render(f"{i + 1}. {score}", True, WHITE)
+            leaderboard_screen.blit(score_text, (150, 100 + i * 30))
+        pygame.display.flip()
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+    pygame.display.set_mode((WIDTH, HEIGHT))
 
+def show_tutorial():
+    tutorial_screen = pygame.display.set_mode((600, 400))
+    pygame.display.set_caption("How to Play")
+    running = True
+    while running:
+        tutorial_screen.fill(BLACK)
+        lines = [
+            "HOW TO PLAY",
+            "Arrow Keys - Move the snake",
+            "R - Restart game",
+            "P - Pause/Resume",
+            "S - Change snake skin",
+            "Collect apples to grow",
+            "Avoid barriers and yourself",
+            "Press ESC to return"
+        ]
+        for i, line in enumerate(lines):
+            text = font.render(line, True, WHITE)
+            tutorial_screen.blit(text, (50, 50 + i * 40))
+        pygame.display.flip()
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    running = False
+    pygame.display.set_mode((WIDTH, HEIGHT))
 
 class SnakeGame:
     def __init__(self):
         self.snake = [(200, 200), (220, 200), (240, 200)]
         self.direction = "RIGHT"
-        self.new_direction = self.direction  
-        self.barriers = self.generate_barriers()  
-        self.power_ups = []  # Initialize power_ups here
-        self.apple = self.generate_apple()
-        self.apple_type = "normal"
+        self.new_direction = self.direction
         self.score = 0
-        self.best_score = self.load_best_score()
+        self.best_scores = load_best_scores()
         self.game_over = False
-        self.difficulty_level = 1
-        self.snake_skin = 0
-        self.combo_count = 0
-        self.timer = 60  # Countdown timer for the game
-        self.speed_boost_active = False
+        self.paused = False
+        self.speed = 10  
         self.shield_active = False
-        self.slowdown_active = False
-
-    def generate_apple(self):
-        while True:
-            x = random.randint(0, WIDTH - BLOCK_SIZE) // BLOCK_SIZE * BLOCK_SIZE
-            y = random.randint(0, HEIGHT - BLOCK_SIZE) // BLOCK_SIZE * BLOCK_SIZE
-            if (x, y) not in self.snake and (x, y) not in self.barriers and (x, y) not in self.power_ups:
-                return (x, y)
-
-    def generate_barriers(self):
-        barriers = []
-        for _ in range(10):
-            x = random.randint(0, WIDTH - BLOCK_SIZE) // BLOCK_SIZE * BLOCK_SIZE
-            y = random.randint(0, HEIGHT - BLOCK_SIZE) // BLOCK_SIZE * BLOCK_SIZE
-            barriers.append((x, y))
-        return barriers
-
-    def generate_power_up(self):
-        while True:
-            x = random.randint(0, WIDTH - BLOCK_SIZE) // BLOCK_SIZE * BLOCK_SIZE
-            y = random.randint(0, HEIGHT - BLOCK_SIZE) // BLOCK_SIZE * BLOCK_SIZE
-            if (x, y) not in self.snake and (x, y) not in self.barriers and (x, y) not in self.power_ups:
-                return (x, y)
-
-    def load_best_score(self):
-        try:
-            with open("best_score.txt", "r") as f:
-                return int(f.read())
-        except FileNotFoundError:
-            return 0
-
-    def save_best_score(self):
-        with open("best_score.txt", "w") as f:
-            f.write(str(self.best_score))
+        self.shield_timer = 0  
+        self.apple_eaten = 0  
+        self.barriers = self.generate_barriers()
+        self.apple = self.generate_apple()
+        self.poison_apple = None
+        self.shield = None
 
     def handle_events(self):
         for event in pygame.event.get():
@@ -121,193 +113,131 @@ class SnakeGame:
                     self.new_direction = "LEFT"
                 elif event.key == pygame.K_RIGHT and self.direction != "LEFT":
                     self.new_direction = "RIGHT"
-                elif event.key == pygame.K_r and self.game_over:
-                    self.reset_game()
-                elif event.key == pygame.K_s:
-                    self.snake_skin = (self.snake_skin + 1) % len(snake_skin_images)
+                elif event.key == pygame.K_p:
+                    self.paused = not self.paused  
+                elif event.key == pygame.K_r:
+                    self.__init__()
 
-    def reset_game(self):
-        self.game_over = False
-        self.snake = [(200, 200), (220, 200), (240, 200)]
-        self.direction = "RIGHT"
-        self.new_direction = self.direction
-        self.apple = self.generate_apple()
-        self.apple_type = "normal"
-        self.score = 0
-        self.difficulty_level = 1
-        self.barriers = self.generate_barriers()
-        self.power_ups = []
-        self.combo_count = 0
-        self.timer = 60
-        self.speed_boost_active = False
-        self.shield_active = False
-        self.slowdown_active = False
-
+    def generate_apple(self):
+        while True:
+            apple = (random.randint(0, (WIDTH - BLOCK_SIZE) // BLOCK_SIZE) * BLOCK_SIZE,
+                     random.randint(0, (HEIGHT - BLOCK_SIZE) // BLOCK_SIZE) * BLOCK_SIZE)
+            if apple not in self.snake and apple not in self.barriers:
+                return apple
+            
     def update(self):
-        if not self.game_over:
-            self.direction = self.new_direction  
+        if self.game_over or self.paused:
+            return
 
-            head = self.snake[-1]
-            if self.direction == "UP":
-                new_head = (head[0], head[1] - BLOCK_SIZE)
-            elif self.direction == "DOWN":
-                new_head = (head[0], head[1] + BLOCK_SIZE)
-            elif self.direction == "LEFT":
-                new_head = (head[0] - BLOCK_SIZE, head[1])
-            elif self.direction == "RIGHT":
-                new_head = (head[0] + BLOCK_SIZE, head[1])
+        if self.shield_active and self.shield_timer > 0:
+            self.shield_timer -= 1
+        elif self.shield_timer == 0:
+            self.shield_active = False
 
-            new_head = (
-                new_head[0] % WIDTH,
-                new_head[1] % HEIGHT
-            )
+        self.direction = self.new_direction
+        head = self.snake[-1]
+        new_head = {
+            "UP": (head[0], head[1] - BLOCK_SIZE),
+            "DOWN": (head[0], head[1] + BLOCK_SIZE),
+            "LEFT": (head[0] - BLOCK_SIZE, head[1]),
+            "RIGHT": (head[0] + BLOCK_SIZE, head[1]),
+        }[self.direction]
 
-            if new_head in self.snake:
-                if not self.shield_active:
-                    self.game_over = True
-                    return
+        new_head = (new_head[0] % WIDTH, new_head[1] % HEIGHT)
 
-            if new_head in self.barriers:
-                if not self.shield_active:
-                    self.game_over = True
-                    return
-
-            self.snake.append(new_head)
-
-            if self.snake[-1] == self.apple:
-                if self.apple_type == "normal":
-                    self.score += 1
-                    self.combo_count += 1
-                elif self.apple_type == "golden":
-                    self.score += 3
-                    self.combo_count += 1
-                elif self.apple_type == "poison":
-                    self.snake.pop(0)
-                    self.combo_count = 0
-                self.apple = self.generate_apple()
-                self.apple_type = random.choice(["normal", "golden", "poison"])
-                self.spawn_power_up()
-            else:
-                self.snake.pop(0)
-
-            if self.score > self.best_score:
-                self.best_score = self.score
-                self.save_best_score()
-
-            if self.score % 10 == 0 and self.score != 0:
-                self.difficulty_level += 1
-
-            self.update_power_ups()
-            self.update_timer()
-
-    def spawn_power_up(self):
-        if random.random() < 0.3:  # 30% chance to spawn a power-up
-            power_up_type = random.choice(["speed", "shield", "slowdown"])
-            power_up_position = self.generate_power_up()
-            self.power_ups.append((power_up_position, power_up_type))
-
-    def update_power_ups(self):
-        for power_up in self.power_ups:
-            if power_up[0] in self.snake:
-                if power_up[1] == "speed":
-                    self.speed_boost_active = True
-                elif power_up[1] == "shield":
-                    self.shield_active = True
-                elif power_up[1] == "slowdown":
-                    self.slowdown_active = True
-                self.power_ups.remove(power_up)
-
-    def update_timer(self):
-        if self.timer > 0:
-            self.timer -= 1 / (10 + self.difficulty_level)
-        else:
+        if new_head in self.snake or (new_head in self.barriers and not self.shield_active):
             self.game_over = True
+            return
+
+        self.snake.append(new_head)
+
+        if new_head == self.apple:
+            self.score += 1
+            self.apple_eaten += 1  
+            self.apple = self.generate_apple()  
+
+            if self.apple_eaten % 3 == 0:  
+                self.generate_powerup()
+
+        if new_head == self.poison_apple:
+            self.score -= 1  
+            self.poison_apple = None  
+
+        if new_head == self.shield:
+            self.shield_active = True  
+            self.shield_timer = 200  
+            self.shield = None  
+
+        if new_head != self.apple:
+            self.snake.pop(0)
+
+    def generate_powerup(self):
+        """Randomly generate either a poison apple or a shield."""
+        powerup_type = random.choice(['poison', 'shield'])
+        while True:
+            powerup = (random.randint(0, (WIDTH - BLOCK_SIZE) // BLOCK_SIZE) * BLOCK_SIZE,
+                       random.randint(0, (HEIGHT - BLOCK_SIZE) // BLOCK_SIZE) * BLOCK_SIZE)
+            if powerup not in self.snake and powerup not in self.barriers and powerup != self.apple:
+                if powerup_type == 'poison':
+                    self.poison_apple = powerup
+                    print("Generated Poison Apple at:", self.poison_apple)
+                elif powerup_type == 'shield':
+                    self.shield = powerup
+                    print("Generated Shield at:", self.shield)
+                break  # Exit the loop once a valid power-up is generated
+
+    def generate_barriers(self):
+        num_barriers = 5
+        barriers = []
+        for _ in range(num_barriers):
+            barriers.append((random.randint(0, (WIDTH - BLOCK_SIZE) // BLOCK_SIZE) * BLOCK_SIZE,
+                             random.randint(0, (HEIGHT - BLOCK_SIZE) // BLOCK_SIZE) * BLOCK_SIZE))
+        return barriers
 
     def draw(self):
         screen.blit(background_image, (0, 0))
-
-        if not self.game_over:
-            for barrier in self.barriers:
-                pygame.draw.rect(screen, BLACK, (barrier[0], barrier[1], BLOCK_SIZE, BLOCK_SIZE))
-
-            for i, pos in enumerate(self.snake):
-                glow_rect = pygame.Rect(pos[0] - 2, pos[1] - 2, BLOCK_SIZE + 4, BLOCK_SIZE + 4)
-                pygame.draw.rect(screen, (0, 100, 0, 100), glow_rect, border_radius=8)
-
-                color_variation = 50 if i % 2 == 0 else 0
-                body_color = (0, 255 - color_variation, 0)
-
-                if snake_skin_images:
-                    screen.blit(snake_skin_images[self.snake_skin], (pos[0], pos[1]))
-                else:
-                    pygame.draw.rect(screen, body_color, (pos[0], pos[1], BLOCK_SIZE, BLOCK_SIZE), border_radius=10)
-
-                inner_rect = pygame.Rect(pos[0] + 3, pos[1] + 3, BLOCK_SIZE - 6, BLOCK_SIZE - 6)
-                pygame.draw.rect(screen, (0, 200 - color_variation, 0), inner_rect, border_radius=8)
-
-            head_x, head_y = self.snake[-1]
-            pygame.draw.circle(screen, BLACK, (head_x + 4, head_y + 4), 3)
-            pygame.draw.circle(screen, BLACK, (head_x + BLOCK_SIZE - 8, head_y + 4), 3)
-
-            if apple_image:
-                if self.apple_type == "normal":
-                    screen.blit(apple_image, (self.apple[0], self.apple[1]))
-                elif self.apple_type == "golden":
-                    screen.blit(golden_apple_image, (self.apple[0], self.apple[1]))
-                elif self.apple_type == "poison":
-                    screen.blit(poison_apple_image, (self.apple[0], self.apple[1]))
-            else:
-                if self.apple_type == "normal":
-                    pygame.draw.ellipse(screen, (200, 0, 0), (self.apple[0], self.apple[1], BLOCK_SIZE, BLOCK_SIZE))
-                elif self.apple_type == "golden":
-                    pygame.draw.ellipse(screen, (255, 215, 0), (self.apple[0], self.apple[1], BLOCK_SIZE, BLOCK_SIZE))
-                elif self.apple_type == "poison":
-                    pygame.draw.ellipse(screen, (139, 0, 0), (self.apple[0], self.apple[1], BLOCK_SIZE, BLOCK_SIZE))
-
-            for power_up in self.power_ups:
-                if power_up[1] == "speed":
-                    if speed_boost_image:
-                        screen.blit(speed_boost_image, power_up[0])
-                    else:
-                        pygame.draw.rect(screen, (0, 0, 255), (power_up[0][0], power_up[0][1], BLOCK_SIZE, BLOCK_SIZE))
-                elif power_up[1] == "shield":
-                    if shield_image:
-                        screen.blit(shield_image, power_up[0])
-                    else:
-                        pygame.draw.rect(screen, (255, 255, 0), (power_up[0][0], power_up[0][1], BLOCK_SIZE, BLOCK_SIZE))
-                elif power_up[1] == "slowdown":
-                    if slowdown_image:
-                        screen.blit(slowdown_image, power_up[0])
-                    else:
-                        pygame.draw.rect(screen, (255, 0, 255), (power_up[0][0], power_up[0][1], BLOCK_SIZE, BLOCK_SIZE))
-
-            score_text = font.render(f"Score: {self.score}", True, WHITE)
-            screen.blit(score_text, (10, 10))
-            best_score_text = font.render(f"Best Score: {self.best_score}", True, WHITE)
-            screen.blit(best_score_text, (10, 40))
-            difficulty_text = font.render(f"Difficulty: {self.difficulty_level}", True, WHITE)
-            screen.blit(difficulty_text, (10, 70))
-            timer_text = font.render(f"Time: {int(self.timer)}", True, WHITE)
-            screen.blit(timer_text, (10, 100))
-            combo_text = font.render(f"Combo: {self.combo_count}", True, WHITE)
-            screen.blit(combo_text, (10, 130))
-
-        else:
-            game_over_text = font.render("Game Over!", True, WHITE)
-            screen.blit(game_over_text, (WIDTH // 2 - 75, HEIGHT // 2 - 18))
-            restart_text = font.render("Press 'R' to restart", True, WHITE)
-            screen.blit(restart_text, (WIDTH // 2 - 100, HEIGHT // 2 + 50))
-
+        for barrier in self.barriers:
+            pygame.draw.rect(screen, BLACK, (barrier[0], barrier[1], BLOCK_SIZE, BLOCK_SIZE))
+        pygame.draw.ellipse(screen, RED, (self.apple[0], self.apple[1], BLOCK_SIZE, BLOCK_SIZE))
+        if self.poison_apple:
+            pygame.draw.ellipse(screen, PURPLE, (self.poison_apple[0], self.poison_apple[1], BLOCK_SIZE, BLOCK_SIZE))
+        if self.shield:
+            pygame.draw.circle(screen, BLUE, (self.shield[0] + BLOCK_SIZE // 2, self.shield[1] + BLOCK_SIZE // 2), BLOCK_SIZE // 2)
+        for segment in self.snake:
+            pygame.draw.circle(screen, GREEN, (segment[0] + BLOCK_SIZE // 2, segment[1] + BLOCK_SIZE // 2), BLOCK_SIZE // 2)
+        score_text = font.render(f"Score: {self.score}", True, WHITE)
+        screen.blit(score_text, (10, 10))
         pygame.display.flip()
 
     def run(self):
         while True:
             self.handle_events()
-            self.update()
-            self.draw()
-            clock.tick(10 + self.difficulty_level)  
+            
+            if not self.paused and not self.game_over:
+                self.update()
 
+            self.draw()
+            clock.tick(self.speed)
 
 if __name__ == "__main__":
-    game = SnakeGame()
-    game.run()
+    best_scores = load_best_scores()
+    recent_score = 0
+    while True:
+        screen.fill(BLACK)
+        text = font.render("Press 'T' for Tutorial, 'L' for Leaderboard, or any key to start", True, WHITE)
+        screen.blit(text, (100, HEIGHT // 2))
+        pygame.display.flip()
+        game = None
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_t:
+                    show_tutorial()
+                elif event.key == pygame.K_l:
+                    show_leaderboard(best_scores, recent_score)
+                else:
+                    game = SnakeGame()
+                    game.run()
+                    break
